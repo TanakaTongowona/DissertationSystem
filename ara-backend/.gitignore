@@ -1,0 +1,6 @@
+/venv
+/.env
+/books
+/uploads
+/ml_models
+/external_cache
