@@ -190,9 +190,6 @@ Format your response as a JSON array of strings:
             self.source_type = "web"
             self.confidence_score = 0.4
             
-        elif method == ResearchMethod.SUGGEST_BOOKS:
-            return await self._suggest_books(query, date_context)
-            
         else:  # ALL - use whatever's available
             if books:
                 context = self._build_library_context(books) + date_context
@@ -243,10 +240,22 @@ Excerpt: {book['content']}
 ---""")
         return "\n".join(context_parts)
     
-    async def _suggest_books(self, query: str, date_context: str = "") -> str:
+    async def _suggest_books(self, query: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> str:
         """Suggest books to add to library with date awareness"""
         self.source_type = "suggestion"
         self.confidence_score = 0.8
+        
+        # Build date context for the prompt
+        date_context = ""
+        if start_date and end_date:
+            date_context = f"\n\nIMPORTANT: You should ONLY suggest books published between {start_date.strftime('%Y-%m-%d')} and {end_date.strftime('%Y-%m-%d')}. Do not suggest books outside this date range."
+            logger.info(f"Suggesting books between {start_date} and {end_date}")
+        elif start_date:
+            date_context = f"\n\nIMPORTANT: You should ONLY suggest books published after {start_date.strftime('%Y-%m-%d')}. Do not suggest books published before this date."
+            logger.info(f"Suggesting books after {start_date}")
+        elif end_date:
+            date_context = f"\n\nIMPORTANT: You should ONLY suggest books published before {end_date.strftime('%Y-%m-%d')}. Do not suggest books published after this date."
+            logger.info(f"Suggesting books before {end_date}")
         
         system_prompt = """You are a academic librarian. Suggest authoritative books that would help answer the user's query. Focus on well-known, respected academic texts."""
         
@@ -262,12 +271,25 @@ For each book, provide:
 - Why it's essential for this topic
 - What specific aspects it would help with
 
-If date filtering was applied, prioritize books published within the specified date range.
+{date_context}
 
-Format as a helpful, organized list.
+CRITICAL INSTRUCTIONS:
+1. If date filtering is applied above, strictly adhere to the publication date constraints
+2. For each book you suggest, explicitly mention its publication year
+3. If you cannot find enough books within the specified date range, acknowledge this limitation
+4. Format as a helpful, organized list with clear sections
 """
         
         result = await self.llm_router.generate(prompt, system_prompt=system_prompt)
+        
+        # Store filter info for suggestions
+        if start_date or end_date:
+            self.filter_info = {
+                "applied": True,
+                "start_date": start_date.isoformat() if start_date else None,
+                "end_date": end_date.isoformat() if end_date else None,
+                "method": "suggest_books"
+            }
         
         return result.get("content", "Unable to generate book suggestions at this time.")
     
@@ -285,11 +307,29 @@ Format as a helpful, organized list.
         self.filter_info = None
         
         try:
-            # Step 1: Retrieve books with date range filters
-            books = await self.retrieve_relevant_books(query, top_k, start_date=start_date, end_date=end_date)
+            # Step 1: Retrieve books with date range filters (only for methods that need books)
+            books = []
+            if method != ResearchMethod.SUGGEST_BOOKS:
+                books = await self.retrieve_relevant_books(query, top_k, start_date=start_date, end_date=end_date)
+            else:
+                # For SUGGEST_BOOKS, we still want to capture filter info
+                if start_date or end_date:
+                    filter_desc = ""
+                    if start_date and end_date:
+                        filter_desc = f"books published between {start_date.strftime('%Y-%m-%d')} and {end_date.strftime('%Y-%m-%d')}"
+                    elif start_date:
+                        filter_desc = f"books published after {start_date.strftime('%Y-%m-%d')}"
+                    elif end_date:
+                        filter_desc = f"books published before {end_date.strftime('%Y-%m-%d')}"
+                    
+                    self.research_log.append({
+                        "step": "filtering",
+                        "filter": filter_desc,
+                        "method": "suggest_books"
+                    })
             
-            # Add date filter info to research log
-            if start_date or end_date:
+            # Add date filter info to research log for non-SUGGEST_BOOKS methods
+            if method != ResearchMethod.SUGGEST_BOOKS and (start_date or end_date):
                 filter_desc = ""
                 if start_date and end_date:
                     filter_desc = f"published between {start_date.strftime('%Y-%m-%d')} and {end_date.strftime('%Y-%m-%d')}"
@@ -373,7 +413,8 @@ Format as a helpful, organized list.
             
             # Step 4: Generate answer or suggestions
             if selected_method == ResearchMethod.SUGGEST_BOOKS:
-                answer = await self._suggest_books(query)
+                # Pass date parameters to _suggest_books
+                answer = await self._suggest_books(query, start_date, end_date)
             else:
                 answer = await self.synthesize_answer(query, self.research_plan, books, selected_method)
             
@@ -387,7 +428,7 @@ Format as a helpful, organized list.
                 answer=answer,
                 owner_id=owner_id,
                 research_method=selected_method.value if selected_method else None,
-                sources=[{"title": b["title"], "similarity": b["similarity"], "date_published": b.get("date_published")} for b in books[:5]],
+                sources=[{"title": b["title"], "similarity": b["similarity"], "date_published": b.get("date_published")} for b in books[:5]] if books else [],
                 provider_used=self.research_log,
                 confidence=self.confidence_score,
                 source_type=self.source_type,
@@ -403,7 +444,7 @@ Format as a helpful, organized list.
                 "query": query,
                 "research_plan": self.research_plan,
                 "answer": answer,
-                "sources": [{"title": b["title"], "similarity": b["similarity"], "date_published": b.get("date_published")} for b in books[:5]],
+                "sources": [{"title": b["title"], "similarity": b["similarity"], "date_published": b.get("date_published")} for b in books[:5]] if books else [],
                 "provider_log": self.research_log,
                 "status": "completed",
                 "confidence": self.confidence_score,

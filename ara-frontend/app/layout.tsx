@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/lib/auth-context'
 import { Toaster } from '@/components/ui/sonner'
+// @ts-expect-error: side-effect import for global CSS
 import './globals.css'
 
 const inter = Inter({ 

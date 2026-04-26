@@ -147,7 +147,7 @@ export default function DashboardPage() {
       {/* Welcome Section */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          Welcome back{user?.first_name ? `, ${user.first_name}` : ""}
+          Welcome{user?.first_name ? `, ${user.first_name}` : ""}
         </h1>
         <p className="text-muted-foreground">
           Start a new research query or explore analytics about your library.

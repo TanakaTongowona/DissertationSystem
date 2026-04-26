@@ -637,7 +637,9 @@ function ResearchPageContent() {
                                       <SelectValue placeholder="Start year" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="any">Any year</SelectItem>
+                                      <SelectItem value="any">
+                                        Any year
+                                      </SelectItem>
                                       {years.map((year) => (
                                         <SelectItem
                                           key={year}
@@ -804,7 +806,9 @@ function ResearchPageContent() {
                                       <SelectValue placeholder="Start year" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="any">Any year</SelectItem>
+                                      <SelectItem value="any">
+                                        Any year
+                                      </SelectItem>
                                       {years.map((year) => (
                                         <SelectItem
                                           key={year}
@@ -1205,11 +1209,16 @@ function ResearchPageContent() {
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <BookOpen className="h-4 w-4" />
-                    Sources Used
+                    {result.research_method === ResearchMethod.SUGGEST_BOOKS
+                      ? "Related Sources in Library"
+                      : "Sources Used"}
                   </CardTitle>
                   <CardDescription>
                     {result.sources.length} book
-                    {result.sources.length !== 1 ? "s" : ""} referenced
+                    {result.sources.length !== 1 ? "s" : ""}
+                    {result.research_method === ResearchMethod.SUGGEST_BOOKS
+                      ? " found in your library matching the recommendations"
+                      : " referenced"}
                     {result.filter_info?.applied &&
                       result.sources.length > 0 && (
                         <span className="block text-xs mt-1">
@@ -1230,7 +1239,12 @@ function ResearchPageContent() {
                       {result.sources.length === 0 && (
                         <div className="text-center py-8 text-muted-foreground">
                           <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p>No library sources used</p>
+                          <p>
+                            {result.research_method ===
+                            ResearchMethod.SUGGEST_BOOKS
+                              ? "No matching books found in your library"
+                              : "No library sources used"}
+                          </p>
                           {result.source_type === "suggestion" && (
                             <p className="text-sm mt-2">
                               These are book recommendations to add to your
@@ -1253,6 +1267,7 @@ function ResearchPageContent() {
                   </ScrollArea>
                 </CardContent>
               </Card>
+              
             </div>
           </div>
         )}

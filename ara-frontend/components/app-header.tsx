@@ -45,7 +45,7 @@ export function AppHeader() {
               <BookOpen className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="hidden font-semibold text-foreground sm:inline-block">
-              Academic Research Agent
+              Dashboard
             </span>
             <span className="font-semibold text-foreground sm:hidden">ARA</span>
           </Link>
@@ -71,15 +71,7 @@ export function AppHeader() {
 
         {/* Search & Actions */}
         <div className="flex items-center gap-3">
-          {/* Search */}
-          <div className="hidden lg:flex relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search..."
-              className="w-64 pl-9 bg-muted/50"
-            />
-          </div>
+
 
           {/* Theme Toggle */}
           <Button

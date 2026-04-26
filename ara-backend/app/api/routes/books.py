@@ -9,6 +9,7 @@ from fastapi import (
     status,
     Form,
 )
+import random
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -527,6 +528,10 @@ async def get_book_recommendations(
     
     logger.info(f"Getting recommendations for book: {book.title} (ID: {book_id})")
     
+    # Extract keywords from the target book's title and metadata
+    target_keywords = extract_keywords_from_book(book)
+    logger.info(f"Extracted keywords from target book: {target_keywords}")
+    
     # Load clustering model
     cluster_model = (
         db.query(models.MLModel)
@@ -540,7 +545,7 @@ async def get_book_recommendations(
     
     if not cluster_model:
         logger.warning("No clustering model found")
-        return await get_simple_recommendations(book_id, limit, db)
+        return await get_simple_recommendations(book_id, limit, db, target_keywords)
     
     logger.info(f"Found clustering model: ID={cluster_model.id}, name={cluster_model.name}, status={cluster_model.status}")
     logger.info(f"Model file path: {cluster_model.file_path}")
@@ -561,7 +566,7 @@ async def get_book_recommendations(
                 logger.info(f"Direct load successful, keys: {model_data.keys()}")
             except Exception as direct_error:
                 logger.error(f"Direct load also failed: {direct_error}")
-                return await get_simple_recommendations(book_id, limit, db)
+                return await get_simple_recommendations(book_id, limit, db, target_keywords)
         
         logger.info(f"Loaded model data keys: {model_data.keys()}")
         
@@ -574,7 +579,7 @@ async def get_book_recommendations(
             logger.info(f"Feature names from DB: {len(feature_names)} features")
         else:
             logger.error("No feature names found in model or database")
-            return await get_simple_recommendations(book_id, limit, db)
+            return await get_simple_recommendations(book_id, limit, db, target_keywords)
         
         # Get all books with content for clustering
         all_books = (
@@ -591,7 +596,7 @@ async def get_book_recommendations(
         
         if len(all_books) < 2:
             logger.warning("Not enough books for recommendations")
-            return await get_simple_recommendations(book_id, limit, db)
+            return await get_simple_recommendations(book_id, limit, db, target_keywords)
         
         # Extract features
         features_df = ml_engine.extract_book_features(all_books)
@@ -603,7 +608,7 @@ async def get_book_recommendations(
         
         if tfidf_features.shape[0] == 0:
             logger.warning("No TF-IDF features extracted")
-            return await get_simple_recommendations(book_id, limit, db)
+            return await get_simple_recommendations(book_id, limit, db, target_keywords)
         
         # Get numerical features
         numerical_features = features_df[['word_count', 'avg_word_length', 'file_size_mb']].values
@@ -635,7 +640,7 @@ async def get_book_recommendations(
         # Verify shape matches
         if X.shape[1] != expected_total_features:
             logger.error(f"Feature mismatch: got {X.shape[1]}, expected {expected_total_features}")
-            return await get_simple_recommendations(book_id, limit, db)
+            return await get_simple_recommendations(book_id, limit, db, target_keywords)
         
         # Scale features if scaler exists
         if "scaler" in model_data and model_data["scaler"] is not None:
@@ -668,29 +673,58 @@ async def get_book_recommendations(
         
         if target_index is None:
             logger.warning(f"Book {book_id} not found in filtered books list")
-            return await get_simple_recommendations(book_id, limit, db)
+            return await get_simple_recommendations(book_id, limit, db, target_keywords)
         
         target_cluster = clusters[target_index]
         logger.info(f"Target book in cluster {target_cluster}")
         
-        # Find recommendations in same cluster
-        recommendations = []
+        # Find and score recommendations in same cluster with keyword matching
+        cluster_books = []
         for i, b in enumerate(all_books):
             if b.id != book_id and clusters[i] == target_cluster:
-                recommendations.append(b)
-                if len(recommendations) >= limit:
-                    break
+                # Calculate keyword relevance score
+                relevance_score = calculate_keyword_relevance(b, target_keywords)
+                cluster_books.append((b, relevance_score))
         
-        logger.info(f"Found {len(recommendations)} recommendations in same cluster")
+        logger.info(f"Found {len(cluster_books)} books in same cluster")
         
-        # If not enough, add from other clusters
+        # Use stratified random sampling with relevance bands
+        recommendations = await get_stratified_recommendations(
+            cluster_books, 
+            limit, 
+            target_keywords,
+            db
+        )
+        
+        # If we don't have enough, add from other clusters with keyword matching
         if len(recommendations) < limit:
-            logger.info("Adding books from other clusters")
+            logger.info(f"Need {limit - len(recommendations)} more recommendations, checking other clusters")
+            
+            # Get remaining books not already in recommendations
+            remaining_books = []
             for i, b in enumerate(all_books):
                 if b.id != book_id and b not in recommendations:
-                    recommendations.append(b)
-                    if len(recommendations) >= limit:
-                        break
+                    # Calculate relevance score
+                    relevance_score = calculate_keyword_relevance(b, target_keywords)
+                    remaining_books.append((b, relevance_score))
+            
+            # Get more recommendations with stratified sampling
+            more_recommendations = await get_stratified_recommendations(
+                remaining_books,
+                limit - len(recommendations),
+                target_keywords,
+                db,
+                min_relevance_threshold=0.5  # Lower threshold for fallback
+            )
+            recommendations.extend(more_recommendations)
+        
+        logger.info(f"Final recommendations count: {len(recommendations)}")
+        
+        # Log recommendations with their scores
+        for i, rec in enumerate(recommendations[:limit]):
+            rec_score = calculate_keyword_relevance(rec, target_keywords)
+            rec_keywords = extract_keywords_from_book(rec)
+            logger.info(f"Recommendation {i+1}: {rec.title} (score: {rec_score:.2f}) - Keywords: {rec_keywords}")
         
         # Format response
         return [
@@ -718,55 +752,240 @@ async def get_book_recommendations(
         logger.error(f"Error in ML recommendations: {e}")
         import traceback
         traceback.print_exc()
-        return await get_simple_recommendations(book_id, limit, db)
+        return await get_simple_recommendations(book_id, limit, db, target_keywords)
+
+
+async def get_stratified_recommendations(
+    scored_books, 
+    limit, 
+    target_keywords, 
+    db,
+    min_relevance_threshold=1.0
+):
+    """
+    Select recommendations using stratified sampling based on relevance bands.
+    This ensures:
+    1. All recommendations meet a minimum relevance threshold
+    2. Variety within each relevance band
+    3. Higher relevance bands contribute more recommendations
     
+    Returns:
+        List of book objects
+    """
+    if not scored_books:
+        return []
+    
+    # Filter out books below minimum threshold
+    filtered_books = [(book, score) for book, score in scored_books if score >= min_relevance_threshold]
+    
+    if not filtered_books:
+        logger.warning(f"No books found above relevance threshold {min_relevance_threshold}")
+        return []
+    
+    # If we have fewer books than limit, just return all
+    if len(filtered_books) <= limit:
+        return [book for book, _ in filtered_books]
+    
+    # Define relevance bands
+    # Band 1: High relevance (score >= 5)
+    # Band 2: Medium-high relevance (score >= 3 and < 5)
+    # Band 3: Medium relevance (score >= 1 and < 3)
+    # Band 4: Low relevance (score < 1)
+    
+    bands = {
+        'high': {'min_score': 5, 'max_score': float('inf'), 'weight': 0.5, 'books': []},
+        'medium_high': {'min_score': 3, 'max_score': 5, 'weight': 0.3, 'books': []},
+        'medium': {'min_score': 1, 'max_score': 3, 'weight': 0.15, 'books': []},
+        'low': {'min_score': min_relevance_threshold, 'max_score': 1, 'weight': 0.05, 'books': []}
+    }
+    
+    # Distribute books into bands
+    for book, score in filtered_books:
+        for band_name, band in bands.items():
+            if band['min_score'] <= score < band['max_score']:
+                band['books'].append((book, score))
+                break
+    
+    # Log band distribution
+    for band_name, band in bands.items():
+        logger.info(f"Band {band_name}: {len(band['books'])} books available")
+    
+    # Calculate how many books to take from each band
+    recommendations = []
+    remaining_limit = limit
+    
+    # Process bands in order of weight (higher weight first)
+    for band_name in ['high', 'medium_high', 'medium', 'low']:
+        band = bands[band_name]
+        if not band['books']:
+            continue
+        
+        # Calculate number of books to take from this band
+        if band_name == 'high' and remaining_limit > 0:
+            # For high relevance band, we might take more if available
+            band_take = min(len(band['books']), remaining_limit)
+        else:
+            # For other bands, take weighted proportion
+            band_take = min(
+                len(band['books']), 
+                max(1, int(remaining_limit * band['weight']))
+            )
+        
+        if band_take <= 0:
+            continue
+        
+        # Randomly select books from this band
+        # Use weighted random within the band to favor higher scores within the band
+        if len(band['books']) <= band_take:
+            # Take all books from this band
+            selected_books = [book for book, _ in band['books']]
+        else:
+            # Use weighted random selection within the band
+            weights = [score for _, score in band['books']]
+            total_weight = sum(weights)
+            probabilities = [w / total_weight for w in weights]
+            
+            selected_indices = set()
+            while len(selected_indices) < band_take:
+                idx = random.choices(range(len(band['books'])), weights=weights, k=1)[0]
+                selected_indices.add(idx)
+            
+            selected_books = [band['books'][idx][0] for idx in selected_indices]
+        
+        recommendations.extend(selected_books)
+        remaining_limit -= len(selected_books)
+        
+        if remaining_limit <= 0:
+            break
+    
+    # If we still need more, add random books from any band
+    if remaining_limit > 0:
+        logger.info(f"Need {remaining_limit} more books, adding from remaining pool")
+        all_available = []
+        for band_name in ['high', 'medium_high', 'medium', 'low']:
+            all_available.extend(bands[band_name]['books'])
+        
+        # Get remaining books not already selected
+        remaining_books = [book for book, _ in all_available if book not in recommendations]
+        
+        if remaining_books:
+            # Randomly select from remaining books
+            additional = random.sample(
+                remaining_books, 
+                min(remaining_limit, len(remaining_books))
+            )
+            recommendations.extend(additional)
+    
+    return recommendations[:limit]
 
-async def get_simple_recommendations(book_id: int, limit: int, db: Session):
-    """Fallback recommendation method when ML model not available"""
+
+def extract_keywords_from_book(book):
+    """
+    Extract relevant keywords from book title and metadata
+    """
+    keywords = set()
+    
+    # Extract from title
+    if book.title:
+        # Split title into words and filter common words
+        title_words = book.title.lower().split()
+        # Remove common stop words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+        title_keywords = [word.strip('.,!?;:()[]{}') for word in title_words if word not in stop_words]
+        keywords.update(title_keywords)
+    
+    # Extract from metadata
+    if book.metadata_json:
+        # Check for subject/topic fields in metadata
+        metadata = book.metadata_json
+        for field in ['subject', 'topics', 'tags', 'category', 'genre', 'keywords']:
+            if field in metadata:
+                if isinstance(metadata[field], list):
+                    for item in metadata[field]:
+                        keywords.add(str(item).lower())
+                elif isinstance(metadata[field], str):
+                    keywords.add(metadata[field].lower())
+    
+    return keywords
+
+
+def calculate_keyword_relevance(book, target_keywords):
+    """
+    Calculate relevance score between a book and target keywords
+    Higher score means more relevant
+    
+    Score calculation:
+    - Exact keyword match: 2 points per match
+    - Keyword in title: 1 point per match
+    - Keyword in metadata: 0.5 points per match
+    """
+    if not target_keywords:
+        return 0
+    
+    score = 0
+    
+    # Get book's keywords
+    book_keywords = extract_keywords_from_book(book)
+    
+    # Count matching keywords (exact matches from extracted keywords)
+    matching_keywords = target_keywords.intersection(book_keywords)
+    score += len(matching_keywords) * 2  # Weighted higher
+    
+    # Bonus for keyword appearing in title
+    if book.title:
+        book_title_lower = book.title.lower()
+        for keyword in target_keywords:
+            if keyword in book_title_lower:
+                score += 1
+    
+    # Bonus for keyword appearing in metadata
+    if book.metadata_json:
+        metadata_str = str(book.metadata_json).lower()
+        for keyword in target_keywords:
+            if keyword in metadata_str:
+                score += 0.5
+    
+    return score
+
+
+async def get_simple_recommendations(book_id: int, limit: int, db: Session, target_keywords: set = None):
+    """
+    Fallback function to get simple recommendations based on title similarity
+    """
+    logger.info(f"Using simple recommendations for book {book_id}")
+    
+    # Get the book
     book = db.query(models.Book).filter(models.Book.id == book_id).first()
-
-    # Try same author first
-    if book and book.author:
-        recommendations = (
-            db.query(models.Book)
-            .filter(models.Book.author == book.author, models.Book.id != book_id)
-            .limit(limit)
-            .all()
-        )
-
-        if recommendations:
-            return [
-                BookDetailResponse(
-                    id=rec.id,
-                    title=rec.title,
-                    author=rec.author,
-                    file_path=rec.file_path,
-                    file_size=rec.file_size,
-                    date_published=rec.date_published,
-                    indexed=rec.embedding is not None,
-                    metadata_json=rec.metadata_json,
-                    created_at=rec.created_at,
-                    content_preview=(
-                        rec.content[:500] + "..."
-                        if rec.content and len(rec.content) > 500
-                        else rec.content
-                    ),
-                    embedding_status=(
-                        "indexed" if rec.embedding is not None else "pending"
-                    ),
-                )
-                for rec in recommendations
-            ]
-
-    # Fallback to recent books
-    recommendations = (
-        db.query(models.Book)
-        .filter(models.Book.id != book_id)
-        .order_by(models.Book.created_at.desc())
-        .limit(limit)
-        .all()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    # If target_keywords weren't provided, extract them now
+    if target_keywords is None:
+        target_keywords = extract_keywords_from_book(book)
+    
+    # Get all books
+    all_books = db.query(models.Book).filter(
+        models.Book.id != book_id,
+        models.Book.content.isnot(None),
+        models.Book.content != ""
+    ).all()
+    
+    # Score books based on keyword relevance
+    scored_books = []
+    for rec in all_books:
+        score = calculate_keyword_relevance(rec, target_keywords)
+        scored_books.append((rec, score))
+    
+    # Use stratified recommendations for fallback
+    recommendations = await get_stratified_recommendations(
+        scored_books, 
+        limit, 
+        target_keywords, 
+        db,
+        min_relevance_threshold=0.5  # Lower threshold for fallback
     )
-
+    
+    # Format response
     return [
         BookDetailResponse(
             id=rec.id,
@@ -787,6 +1006,7 @@ async def get_simple_recommendations(book_id: int, limit: int, db: Session):
         )
         for rec in recommendations
     ]
+
 
 
 @router.get("/stats/summary")
