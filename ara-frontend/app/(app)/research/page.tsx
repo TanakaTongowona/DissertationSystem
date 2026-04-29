@@ -777,7 +777,7 @@ function ResearchPageContent() {
                             <span className="font-medium">Suggest Books</span>
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Get recommendations for books to add to your library
+                            Get recommendations outside your library
                           </p>
 
                           {/* Date range selector integrated directly in the card */}
@@ -1188,21 +1188,6 @@ function ResearchPageContent() {
                 </CardContent>
               </Card>
 
-              {/* Provider */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">AI Provider</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ProviderIndicator
-                    provider={result.provider}
-                    status="active"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {getProviderDisplayName(result.provider)}
-                  </p>
-                </CardContent>
-              </Card>
 
               {/* Sources */}
               <Card>

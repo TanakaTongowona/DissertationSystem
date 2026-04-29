@@ -60,7 +60,7 @@ import { useRouter } from "next/navigation";
 import { bulkImportApi, indexingApi } from "@/lib/api"; // Add these imports
 
 type ViewMode = "grid" | "list";
-type SortBy = "date" | "title" | "size";
+type SortBy = "date" |"datecreated"| "title" | "size";
 type FilterBy = "all" | "indexed" | "pending";
 
 interface UploadingFile {
@@ -325,6 +325,11 @@ export default function LibraryPage() {
           return (
             new Date(b.date_published || 0).getTime() -
             new Date(a.date_published || 0).getTime()
+          );
+        case "datecreated":
+          return (
+            new Date(b.created_at || 0).getTime() -
+            new Date(a.created_at || 0).getTime()
           );
       }
     });
@@ -1270,8 +1275,6 @@ export default function LibraryPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="google_books">Google Books</SelectItem>
-                  <SelectItem value="open_library">Open Library</SelectItem>
-                  <SelectItem value="crossref">Crossref</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1352,7 +1355,8 @@ export default function LibraryPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="date">By Date</SelectItem>
+              <SelectItem value="date">By Publish Date</SelectItem>
+              <SelectItem value="datecreated">By Upload Date</SelectItem>
               <SelectItem value="title">By Title</SelectItem>
               <SelectItem value="size">By Size</SelectItem>
             </SelectContent>

@@ -83,14 +83,16 @@ const profileSchema = z.object({
   email: z.string().email("Please enter a valid email"),
 });
 
-const passwordSchema = z.object({
-  currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string(),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"],
-});
+const passwordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 type PasswordFormValues = z.infer<typeof passwordSchema>;
@@ -148,12 +150,16 @@ export default function SettingsPage() {
 
   // Research preferences
   const [defaultSources, setDefaultSources] = useState(5);
-  const [providerOrder, setProviderOrder] = useState<"local" | "cloud">("local");
+  const [providerOrder, setProviderOrder] = useState<"local" | "cloud">(
+    "local",
+  );
   const [autoFallback, setAutoFallback] = useState(true);
   const [autoIndex, setAutoIndex] = useState(true);
 
   // API configuration
-  const [ollamaEndpoint, setOllamaEndpoint] = useState("http://localhost:11434");
+  const [ollamaEndpoint, setOllamaEndpoint] = useState(
+    "http://localhost:11434",
+  );
   const [openaiKey, setOpenaiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [showOpenAIKey, setShowOpenAIKey] = useState(false);
@@ -309,13 +315,15 @@ export default function SettingsPage() {
   };
 
   const initials = user
-    ? `${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`.toUpperCase() || "U"
+    ? `${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`.toUpperCase() ||
+      "U"
     : "U";
 
   // Filter models by type
-  const filteredModels = selectedModelType === "all"
-    ? models
-    : models.filter((m) => m.model_type === selectedModelType);
+  const filteredModels =
+    selectedModelType === "all"
+      ? models
+      : models.filter((m) => m.model_type === selectedModelType);
 
   return (
     <div className="container py-8 px-4 max-w-6xl mx-auto">
@@ -338,10 +346,6 @@ export default function SettingsPage() {
                 <Brain className="h-4 w-4" />
                 ML Models
               </TabsTrigger>
-              <TabsTrigger value="api" className="gap-2">
-                <Key className="h-4 w-4" />
-                API
-              </TabsTrigger>
             </>
           )}
         </TabsList>
@@ -355,10 +359,18 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <Form {...profileForm}>
-                <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-6">
+                <form
+                  onSubmit={profileForm.handleSubmit(onProfileSubmit)}
+                  className="space-y-6"
+                >
                   <div className="flex items-center gap-6">
                     <Avatar className="h-20 w-20">
-                      <AvatarImage src={user?.avatar} alt={user ? `${user.first_name} ${user.last_name}` : "User"} />
+                      <AvatarImage
+                        src={user?.avatar}
+                        alt={
+                          user ? `${user.first_name} ${user.last_name}` : "User"
+                        }
+                      />
                       <AvatarFallback className="bg-primary text-primary-foreground text-xl">
                         {initials}
                       </AvatarFallback>
@@ -412,7 +424,10 @@ export default function SettingsPage() {
                     )}
                   />
 
-                  <Button type="submit" disabled={profileForm.formState.isSubmitting}>
+                  <Button
+                    type="submit"
+                    disabled={profileForm.formState.isSubmitting}
+                  >
                     {profileForm.formState.isSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -437,7 +452,10 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <Form {...passwordForm}>
-                <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
+                <form
+                  onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
+                  className="space-y-4"
+                >
                   <FormField
                     control={passwordForm.control}
                     name="currentPassword"
@@ -480,7 +498,10 @@ export default function SettingsPage() {
                     )}
                   />
 
-                  <Button type="submit" disabled={passwordForm.formState.isSubmitting}>
+                  <Button
+                    type="submit"
+                    disabled={passwordForm.formState.isSubmitting}
+                  >
                     {passwordForm.formState.isSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -507,7 +528,8 @@ export default function SettingsPage() {
                   ML Model Training
                 </CardTitle>
                 <CardDescription>
-                  Train machine learning models for book classification, popularity prediction, and clustering
+                  Train machine learning models for book classification,
+                  popularity prediction, and clustering
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -530,7 +552,8 @@ export default function SettingsPage() {
                     )}
                   </Button>
                   <p className="text-sm text-muted-foreground">
-                    Training runs in background. Models will be available when complete.
+                    Training runs in background. Models will be available when
+                    complete.
                   </p>
                 </div>
               </CardContent>
@@ -543,8 +566,12 @@ export default function SettingsPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Total Models</p>
-                        <p className="text-2xl font-bold">{mlStats.models.total}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Total Models
+                        </p>
+                        <p className="text-2xl font-bold">
+                          {mlStats.models.total}
+                        </p>
                       </div>
                       <Layers className="h-8 w-8 text-muted-foreground" />
                     </div>
@@ -554,8 +581,12 @@ export default function SettingsPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Ready Models</p>
-                        <p className="text-2xl font-bold text-emerald-500">{mlStats.models.ready}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Ready Models
+                        </p>
+                        <p className="text-2xl font-bold text-emerald-500">
+                          {mlStats.models.ready}
+                        </p>
                       </div>
                       <CheckCircle className="h-8 w-8 text-emerald-500" />
                     </div>
@@ -565,8 +596,12 @@ export default function SettingsPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Total Predictions</p>
-                        <p className="text-2xl font-bold">{mlStats.predictions.total}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Total Predictions
+                        </p>
+                        <p className="text-2xl font-bold">
+                          {mlStats.predictions.total}
+                        </p>
                       </div>
                       <TrendingUp className="h-8 w-8 text-muted-foreground" />
                     </div>
@@ -576,8 +611,12 @@ export default function SettingsPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Avg. Prediction Time</p>
-                        <p className="text-2xl font-bold">{mlStats.predictions.avg_time_ms.toFixed(1)}ms</p>
+                        <p className="text-sm text-muted-foreground">
+                          Avg. Prediction Time
+                        </p>
+                        <p className="text-2xl font-bold">
+                          {mlStats.predictions.avg_time_ms.toFixed(1)}ms
+                        </p>
                       </div>
                       <Clock className="h-8 w-8 text-muted-foreground" />
                     </div>
@@ -600,19 +639,31 @@ export default function SettingsPage() {
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Select value={selectedModelType} onValueChange={setSelectedModelType}>
+                    <Select
+                      value={selectedModelType}
+                      onValueChange={setSelectedModelType}
+                    >
                       <SelectTrigger className="w-36">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Models</SelectItem>
-                        <SelectItem value="classification">Classification</SelectItem>
+                        <SelectItem value="classification">
+                          Classification
+                        </SelectItem>
                         <SelectItem value="regression">Regression</SelectItem>
                         <SelectItem value="clustering">Clustering</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button variant="outline" size="icon" onClick={loadMLData} disabled={isLoadingML}>
-                      <RefreshCw className={cn("h-4 w-4", isLoadingML && "animate-spin")} />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={loadMLData}
+                      disabled={isLoadingML}
+                    >
+                      <RefreshCw
+                        className={cn("h-4 w-4", isLoadingML && "animate-spin")}
+                      />
                     </Button>
                   </div>
                 </div>
@@ -621,7 +672,10 @@ export default function SettingsPage() {
                 {isLoadingML ? (
                   <div className="space-y-4">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="flex items-center justify-between p-4 rounded-lg border animate-pulse">
+                      <div
+                        key={i}
+                        className="flex items-center justify-between p-4 rounded-lg border animate-pulse"
+                      >
                         <div className="space-y-2">
                           <div className="h-5 w-32 bg-muted rounded" />
                           <div className="h-4 w-24 bg-muted rounded" />
@@ -634,54 +688,85 @@ export default function SettingsPage() {
                   <div className="text-center py-12 text-muted-foreground">
                     <Brain className="h-12 w-12 mx-auto mb-3 opacity-50" />
                     <p>No models trained yet</p>
-                    <p className="text-sm mt-1">Click "Train All Models" to get started</p>
+                    <p className="text-sm mt-1">
+                      Click "Train All Models" to get started
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {filteredModels.map((model) => (
-                      <div
-                        key={model.id}
-                        className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/5 transition-colors"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3">
-                            <h3 className="font-semibold text-foreground">{model.name}</h3>
-                            <Badge variant="outline" className="text-xs">
-                              {model.model_type}
-                            </Badge>
-                            <Badge
-                              variant={model.status === "active" ? "default" : "secondary"}
-                              className={cn(
-                                model.status === "active" && "bg-emerald-500 hover:bg-emerald-600"
+                    {filteredModels.map((model) => {
+                      const metric = model.metrics[0]; // only one key metric now
+                      const metricLabel: Record<string, string> = {
+                        test_accuracy: "Accuracy",
+                        test_r2: "R²",
+                        silhouette_score: "Silhouette",
+                      };
+
+                      return (
+                        <div
+                          key={model.id}
+                          className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/5 transition-colors"
+                        >
+                          {/* Left: name + badges */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-semibold text-foreground truncate">
+                                {model.name}
+                              </h3>
+                              <Badge
+                                variant="outline"
+                                className="text-xs shrink-0"
+                              >
+                                {model.model_type}
+                              </Badge>
+                              <Badge
+                                variant={
+                                  model.status === "active"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className={cn(
+                                  "shrink-0",
+                                  model.status === "active" &&
+                                    "bg-emerald-500 hover:bg-emerald-600",
+                                )}
+                              >
+                                {model.status}
+                              </Badge>
+                            </div>
+
+                            {/* Second line: compact metadata */}
+                            <p className="mt-1 text-xs text-muted-foreground truncate">
+                              {model.algorithm} &middot; v{model.version}{" "}
+                              &middot;{" "}
+                              {new Date(model.created_at).toLocaleDateString()}
+                              {metric && (
+                                <>
+                                  {" "}
+                                  &middot;{" "}
+                                  <span className="font-medium text-foreground">
+                                    {metricLabel[metric.name] ?? metric.name}:{" "}
+                                    {metric.value.toFixed(3)}
+                                  </span>
+                                </>
                               )}
+                            </p>
+                          </div>
+
+                          {/* Right: activate button */}
+                          {model.status !== "active" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="ml-4 shrink-0"
+                              onClick={() => handleActivateModel(model.id)}
                             >
-                              {model.status}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                            <span>Algorithm: {model.algorithm}</span>
-                            <span>Version: {model.version}</span>
-                            <span>
-                              Created: {new Date(model.created_at).toLocaleDateString()}
-                            </span>
-                            {model.metrics.map((metric) => (
-                              <span key={metric.name}>
-                                {metric.name}: {metric.value.toFixed(3)}
-                              </span>
-                            ))}
-                          </div>
+                              Activate
+                            </Button>
+                          )}
                         </div>
-                        {model.status !== "active" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleActivateModel(model.id)}
-                          >
-                            Activate
-                          </Button>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -702,163 +787,20 @@ export default function SettingsPage() {
                 <CardContent>
                   <div className="space-y-2">
                     {mlStats.most_used_models.map((model) => (
-                      <div key={model.name} className="flex items-center justify-between p-2">
+                      <div
+                        key={model.name}
+                        className="flex items-center justify-between p-2"
+                      >
                         <span className="font-medium">{model.name}</span>
-                        <Badge variant="secondary">{model.predictions} predictions</Badge>
+                        <Badge variant="secondary">
+                          {model.predictions} predictions
+                        </Badge>
                       </div>
                     ))}
                   </div>
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
-        )}
-
-        {/* API Configuration - Superuser Only */}
-        {isSuperuser && (
-          <TabsContent value="api" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>API Configuration</CardTitle>
-                <CardDescription>
-                  Configure connections to AI providers
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Connection Status */}
-                {healthStatus && (
-                  <div className="p-4 rounded-lg bg-muted space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Ollama</span>
-                      <Badge
-                        variant={healthStatus.ollama_running ? "default" : "destructive"}
-                        className={cn(
-                          healthStatus.ollama_running
-                            ? "bg-emerald-500 hover:bg-emerald-600"
-                            : ""
-                        )}
-                      >
-                        {healthStatus.ollama_running ? (
-                          <><CheckCircle className="h-3 w-3 mr-1" /> Connected</>
-                        ) : (
-                          <><XCircle className="h-3 w-3 mr-1" /> Disconnected</>
-                        )}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Internet</span>
-                      <Badge
-                        variant={healthStatus.internet_accessible ? "default" : "secondary"}
-                        className={cn(
-                          healthStatus.internet_accessible
-                            ? "bg-emerald-500 hover:bg-emerald-600"
-                            : ""
-                        )}
-                      >
-                        {healthStatus.internet_accessible ? (
-                          <><CheckCircle className="h-3 w-3 mr-1" /> Available</>
-                        ) : (
-                          "Offline"
-                        )}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Books</span>
-                      <span className="text-sm text-muted-foreground">
-                        {healthStatus.books_count} indexed
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                <Button variant="outline" onClick={testConnection} disabled={isTestingConnection}>
-                  {isTestingConnection ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Testing...
-                    </>
-                  ) : (
-                    <>
-                      <Server className="h-4 w-4 mr-2" />
-                      Test Connection
-                    </>
-                  )}
-                </Button>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <Label htmlFor="ollama-endpoint">Ollama Endpoint</Label>
-                  <Input
-                    id="ollama-endpoint"
-                    value={ollamaEndpoint}
-                    onChange={(e) => setOllamaEndpoint(e.target.value)}
-                    placeholder="http://localhost:11434"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    The URL of your local Ollama instance
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="openai-key">OpenAI API Key (optional)</Label>
-                  <div className="relative">
-                    <Input
-                      id="openai-key"
-                      type={showOpenAIKey ? "text" : "password"}
-                      value={openaiKey}
-                      onChange={(e) => setOpenaiKey(e.target.value)}
-                      placeholder="sk-..."
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowOpenAIKey(!showOpenAIKey)}
-                    >
-                      {showOpenAIKey ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="anthropic-key">Anthropic API Key (optional)</Label>
-                  <div className="relative">
-                    <Input
-                      id="anthropic-key"
-                      type={showAnthropicKey ? "text" : "password"}
-                      value={anthropicKey}
-                      onChange={(e) => setAnthropicKey(e.target.value)}
-                      placeholder="sk-ant-..."
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowAnthropicKey(!showAnthropicKey)}
-                    >
-                      {showAnthropicKey ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button onClick={saveAPIConfiguration}>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Configuration
-                </Button>
-              </CardFooter>
-            </Card>
           </TabsContent>
         )}
       </Tabs>

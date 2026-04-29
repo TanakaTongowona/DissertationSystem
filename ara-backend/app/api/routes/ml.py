@@ -67,23 +67,48 @@ async def list_models(
     current_user: models.User = Depends(oauth2.get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List all trained ML models"""
-    
+    """List only the best version of each trained ML model."""
+
     query = db.query(models.MLModel)
-    
     if model_type:
         query = query.filter(models.MLModel.model_type == model_type)
-    
-    models_list = query.order_by(
-        models.MLModel.created_at.desc()
-    ).offset(skip).limit(limit).all()
-    
+
+    all_models = query.order_by(models.MLModel.created_at.desc()).all()
+
+    # Keep only the best version per model name:
+    # prefer status="active", otherwise the most recently created one.
+    seen: dict[str, models.MLModel] = {}
+    for m in all_models:
+        if m.name not in seen:
+            seen[m.name] = m
+        elif m.status == "active" and seen[m.name].status != "active":
+            seen[m.name] = m
+
+    deduped = list(seen.values())[skip: skip + limit]
+
+    # Key metrics to surface per model type — one value each
+    KEY_METRICS = {
+        "classification": "test_accuracy",
+        "regression":     "test_r2",
+        "clustering":     "silhouette_score",
+    }
+
     result = []
-    for model in models_list:
-        metrics = db.query(models.ModelMetric).filter(
-            models.ModelMetric.model_id == model.id
-        ).limit(5).all()
-        
+    for model in deduped:
+        key_metric_name = KEY_METRICS.get(model.model_type)
+        metrics = []
+        if key_metric_name:
+            m = (
+                db.query(models.ModelMetric)
+                .filter(
+                    models.ModelMetric.model_id == model.id,
+                    models.ModelMetric.metric_name == key_metric_name,
+                )
+                .first()
+            )
+            if m:
+                metrics = [{"name": m.metric_name, "value": m.metric_value}]
+
         result.append({
             "id": model.id,
             "name": model.name,
@@ -92,12 +117,9 @@ async def list_models(
             "version": model.version,
             "status": model.status,
             "created_at": model.created_at.isoformat() if model.created_at else None,
-            "metrics": [
-                {"name": m.metric_name, "value": m.metric_value}
-                for m in metrics
-            ]
+            "metrics": metrics,
         })
-    
+
     return result
 
 
