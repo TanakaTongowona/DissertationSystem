@@ -62,29 +62,18 @@ async def predict(
 @router.get("/models", response_model=List[ModelResponse])
 async def list_models(
     skip: int = 0,
-    limit: int = 20,
+    limit: int = 100,
     model_type: Optional[str] = None,
     current_user: models.User = Depends(oauth2.get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List only the best version of each trained ML model."""
+    """List all trained ML models."""
 
     query = db.query(models.MLModel)
     if model_type:
         query = query.filter(models.MLModel.model_type == model_type)
 
-    all_models = query.order_by(models.MLModel.created_at.desc()).all()
-
-    # Keep only the best version per model name:
-    # prefer status="active", otherwise the most recently created one.
-    seen: dict[str, models.MLModel] = {}
-    for m in all_models:
-        if m.name not in seen:
-            seen[m.name] = m
-        elif m.status == "active" and seen[m.name].status != "active":
-            seen[m.name] = m
-
-    deduped = list(seen.values())[skip: skip + limit]
+    all_models = query.order_by(models.MLModel.created_at.desc()).offset(skip).limit(limit).all()
 
     # Key metrics to surface per model type — one value each
     KEY_METRICS = {
@@ -94,7 +83,7 @@ async def list_models(
     }
 
     result = []
-    for model in deduped:
+    for model in all_models:
         key_metric_name = KEY_METRICS.get(model.model_type)
         metrics = []
         if key_metric_name:

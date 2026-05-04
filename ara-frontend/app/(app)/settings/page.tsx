@@ -213,10 +213,12 @@ export default function SettingsPage() {
       }
 
       // Load models list
-      const modelsResult = await mlApi.listModels(0, 50);
+      const modelsResult = await mlApi.listModels(0, 100);
       if (modelsResult.data) {
         setModels(modelsResult.data);
       }
+      
+      toast.success("ML data refreshed");
     } catch (error) {
       console.error("Failed to load ML data:", error);
       toast.error("Failed to load ML dashboard data");
@@ -231,8 +233,30 @@ export default function SettingsPage() {
       const result = await mlApi.trainModels();
       if (result.data) {
         toast.success("Model training started in background");
-        // Refresh stats after a delay
-        setTimeout(() => loadMLData(), 3000);
+        // Refresh stats after training completes - poll every 5 seconds for up to 2 minutes
+        let attempts = 0;
+        const maxAttempts = 24; // 2 minutes
+        const pollInterval = setInterval(async () => {
+          attempts++;
+          try {
+            const statsResult = await mlApi.getDashboardStats();
+            if (statsResult.data) {
+              const newTotalModels = statsResult.data.models.total;
+              const oldTotalModels = mlStats?.models.total || 0;
+              if (newTotalModels > oldTotalModels || attempts >= maxAttempts) {
+                // Models have been updated or timeout reached
+                clearInterval(pollInterval);
+                loadMLData();
+              }
+            }
+          } catch (error) {
+            console.error("Error polling for training completion:", error);
+          }
+          if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            loadMLData(); // Final refresh even if no change detected
+          }
+        }, 5000); // Poll every 5 seconds
       }
     } catch (error) {
       console.error("Failed to start training:", error);
@@ -738,8 +762,8 @@ export default function SettingsPage() {
                             {/* Second line: compact metadata */}
                             <p className="mt-1 text-xs text-muted-foreground truncate">
                               {model.algorithm} &middot; v{model.version}{" "}
-                              &middot;{" "}
-                              {new Date(model.created_at).toLocaleDateString()}
+                              &middot; Trained{" "}
+                              {new Date(model.created_at).toLocaleString()}
                               {metric && (
                                 <>
                                   {" "}
