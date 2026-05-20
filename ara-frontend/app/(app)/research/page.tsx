@@ -1194,15 +1194,15 @@ function ResearchPageContent() {
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <BookOpen className="h-4 w-4" />
-                    {result.research_method === ResearchMethod.SUGGEST_BOOKS
+                    {result.research_method === ResearchMethod.SUGGEST_BOOKS || result.research_method === ResearchMethod.LLM_GENERAL
                       ? "Related Sources in Library"
                       : "Sources Used"}
                   </CardTitle>
                   <CardDescription>
                     {result.sources.length} book
                     {result.sources.length !== 1 ? "s" : ""}
-                    {result.research_method === ResearchMethod.SUGGEST_BOOKS
-                      ? " found in your library matching the recommendations"
+                    {result.research_method === ResearchMethod.SUGGEST_BOOKS || result.research_method === ResearchMethod.LLM_GENERAL
+                      ? " found in your library matching the research"
                       : " referenced"}
                     {result.filter_info?.applied &&
                       result.sources.length > 0 && (
